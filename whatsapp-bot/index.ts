@@ -228,12 +228,24 @@ client.initialize().catch((error) => {
 // Keep process alive
 process.on('SIGINT', async () => {
   console.log('Shutting down...')
-  await client.destroy()
+  try {
+    if (client.pupBrowser) {
+      await client.destroy()
+    }
+  } catch (error) {
+    console.error('Error during shutdown:', error)
+  }
   process.exit(0)
 })
 
 process.on('SIGTERM', async () => {
   console.log('Shutting down...')
-  await client.destroy()
+  try {
+    if (client.pupBrowser) {
+      await client.destroy()
+    }
+  } catch (error) {
+    console.error('Error during shutdown:', error)
+  }
   process.exit(0)
 })
