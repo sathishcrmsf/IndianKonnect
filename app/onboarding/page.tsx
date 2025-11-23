@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowRight, ArrowLeft, Check } from "lucide-react"
+import { ArrowRight, ArrowLeft, Check, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 const countries = [
@@ -30,28 +30,131 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1)
   const [selectedCountry, setSelectedCountry] = useState(countries[0])
   const [phoneNumber, setPhoneNumber] = useState("")
+  const [otp, setOtp] = useState("")
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [verifyLoading, setVerifyLoading] = useState(false)
   const [selectedCity, setSelectedCity] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState(0)
 
   const handleScreen1Continue = () => {
     setStep(2)
   }
 
-  const handleScreen2Continue = () => {
+  const handleScreen2Continue = async () => {
     if (phoneNumber.length >= 10) {
-      setStep(3)
+      setOtpLoading(true)
+      try {
+        const fullPhone = `${selectedCountry.code}${phoneNumber}`
+        const response = await fetch("/api/auth/send-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phoneNumber: fullPhone }),
+        })
+
+        const data = await response.json()
+        if (data.success) {
+          setOtpSent(true)
+          setStep(3)
+          setCountdown(60) // 60 second countdown
+          // In development, show OTP
+          if (data.otp) {
+            alert(`[DEV] Your OTP is: ${data.otp}`)
+          }
+        } else {
+          alert(data.error || "Failed to send OTP")
+        }
+      } catch (error) {
+        alert("Failed to send OTP. Please try again.")
+      } finally {
+        setOtpLoading(false)
+      }
     }
   }
 
-  const handleScreen3Continue = () => {
+  const handleResendOTP = async () => {
+    if (countdown > 0) return
+    setOtpLoading(true)
+    try {
+      const fullPhone = `${selectedCountry.code}${phoneNumber}`
+      const response = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumber: fullPhone }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setCountdown(60)
+        if (data.otp) {
+          alert(`[DEV] Your OTP is: ${data.otp}`)
+        }
+      }
+    } catch (error) {
+      alert("Failed to resend OTP")
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 6) return
+
+    setVerifyLoading(true)
+    try {
+      const fullPhone = `${selectedCountry.code}${phoneNumber}`
+      const response = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: fullPhone,
+          otp,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        // Store user data
+        localStorage.setItem("user", JSON.stringify(data.user))
+        localStorage.setItem("authToken", data.token)
+        setStep(4) // Move to city selection
+      } else {
+        alert(data.error || "Invalid OTP")
+      }
+    } catch (error) {
+      alert("Failed to verify OTP. Please try again.")
+    } finally {
+      setVerifyLoading(false)
+    }
+  }
+
+  const handleScreen4Continue = () => {
     if (selectedCity) {
-      // Store in localStorage
-      localStorage.setItem("onboarding", JSON.stringify({
-        phone: `${selectedCountry.code}${phoneNumber}`,
-        cityId: selectedCity,
-      }))
+      // Update user city
+      const fullPhone = `${selectedCountry.code}${phoneNumber}`
+      fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: fullPhone,
+          otp: "verified", // Already verified
+          cityId: selectedCity,
+        }),
+      })
+
       router.push("/home")
     }
   }
+
+  // Countdown timer
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setInterval(() => {
+        setCountdown((prev) => prev - 1)
+      }, 1000)
+      return () => clearInterval(timer)
+    }
+  }, [countdown])
 
   // Screen 1: Hero
   if (step === 1) {
@@ -135,17 +238,93 @@ export default function OnboardingPage() {
           <Button
             className="flex-1"
             onClick={handleScreen2Continue}
-            disabled={phoneNumber.length < 10}
+            disabled={phoneNumber.length < 10 || otpLoading}
           >
-            Continue
-            <ArrowRight className="ml-2 h-4 w-4" />
+            {otpLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                Send OTP
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </>
+            )}
           </Button>
         </div>
       </div>
     )
   }
 
-  // Screen 3: City Selection
+  // Screen 3: OTP Verification
+  if (step === 3) {
+    return (
+      <div className="flex min-h-screen flex-col px-4 py-12">
+        <h1 className="mb-2 text-2xl font-bold">Verify your phone</h1>
+        <p className="mb-8 text-sm text-muted-foreground">
+          We sent a 6-digit code to {selectedCountry.code}{phoneNumber}
+        </p>
+
+        <div className="mb-6">
+          <label className="mb-2 block text-sm text-muted-foreground">
+            Enter OTP
+          </label>
+          <Input
+            type="text"
+            placeholder="123456"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            className="text-center text-2xl tracking-widest"
+            maxLength={6}
+            autoFocus
+          />
+        </div>
+
+        <div className="mb-6 text-center">
+          <button
+            onClick={handleResendOTP}
+            disabled={countdown > 0 || otpLoading}
+            className="text-sm text-whatsapp-green disabled:text-muted-foreground"
+          >
+            {countdown > 0
+              ? `Resend OTP in ${countdown}s`
+              : "Resend OTP"}
+          </button>
+        </div>
+
+        <div className="mt-auto flex gap-3">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setStep(2)}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={handleVerifyOTP}
+            disabled={otp.length !== 6 || verifyLoading}
+          >
+            {verifyLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Verifying...
+              </>
+            ) : (
+              <>
+                Verify
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Screen 4: City Selection
   return (
     <div className="flex min-h-screen flex-col px-4 py-12">
       <h1 className="mb-8 text-2xl font-bold">Choose your city</h1>
@@ -181,7 +360,7 @@ export default function OnboardingPage() {
         </Button>
         <Button
           className="flex-1"
-          onClick={handleScreen3Continue}
+          onClick={handleScreen4Continue}
           disabled={!selectedCity}
         >
           Get Started

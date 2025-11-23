@@ -30,11 +30,31 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
         onClick={() => onOpenChange(false)}
       />
       <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 transform p-4">
-        <div className="rounded-lg bg-background shadow-lg">
+        <div className="rounded-lg bg-background shadow-lg border border-border">
           {children}
         </div>
       </div>
     </>
   )
+}
+
+export function DialogContent({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("p-6", className)}>{children}</div>
+}
+
+export function DialogHeader({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("mb-4", className)}>{children}</div>
+}
+
+export function DialogTitle({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <h2 className={cn("text-lg font-semibold", className)}>{children}</h2>
+}
+
+export function DialogDescription({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <p className={cn("text-sm text-muted-foreground", className)}>{children}</p>
+}
+
+export function DialogFooter({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("flex justify-end gap-2 mt-4", className)}>{children}</div>
 }
 

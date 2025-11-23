@@ -2,10 +2,18 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Share2, Flag, Verified } from "lucide-react"
+import { ArrowLeft, Share2, Flag, Verified, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Carousel } from "@/components/ui/carousel"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { formatCurrency } from "@/lib/utils"
 import { Post } from "@/types"
 import { DiyaSpinner } from "@/components/ui/loading"
@@ -47,6 +55,9 @@ export default function PostDetailPage() {
   const router = useRouter()
   const [post, setPost] = useState<Post | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showReportDialog, setShowReportDialog] = useState(false)
+  const [reportReason, setReportReason] = useState("")
+  const [reporting, setReporting] = useState(false)
 
   useEffect(() => {
     // Simulate loading
@@ -72,6 +83,77 @@ export default function PostDetailPage() {
   const handleWhatsAppCall = () => {
     const phone = post.user?.phone?.replace(/\D/g, "") || ""
     window.open(`https://wa.me/${phone}?text=Hi!`, "_blank")
+  }
+
+  const handleReport = async () => {
+    if (!reportReason.trim()) return
+
+    setReporting(true)
+    try {
+      // Get user ID from localStorage
+      const userStr = localStorage.getItem("user")
+      const user = userStr ? JSON.parse(userStr) : null
+
+      if (!user) {
+        alert("Please login to report posts")
+        return
+      }
+
+      const response = await fetch(`/api/posts/${post.id}/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          reason: reportReason,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setShowReportDialog(false)
+        setReportReason("")
+        if (data.autoHidden) {
+          alert("Post reported and automatically hidden due to multiple reports")
+        } else {
+          alert(`Post reported successfully. ${data.reportCount || 1} report(s) total.`)
+        }
+      } else {
+        alert(data.error || "Failed to report post")
+      }
+    } catch (error) {
+      alert("Failed to report post. Please try again.")
+    } finally {
+      setReporting(false)
+    }
+  }
+
+  const handleMarkSuccess = async () => {
+    try {
+      const userStr = localStorage.getItem("user")
+      const user = userStr ? JSON.parse(userStr) : null
+
+      if (!user) {
+        alert("Please login to mark deals as successful")
+        return
+      }
+
+      const response = await fetch(`/api/posts/${post.id}/success`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        alert("Thank you! Success count updated.")
+      } else {
+        alert(data.error || "Failed to update success count")
+      }
+    } catch (error) {
+      alert("Failed to mark as successful. Please try again.")
+    }
   }
 
   return (
@@ -164,12 +246,24 @@ export default function PostDetailPage() {
           </Button>
         </div>
 
+        {/* Success Button */}
+        <div className="mb-4">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleMarkSuccess}
+          >
+            <CheckCircle className="mr-2 h-4 w-4" />
+            Mark as Successful Deal
+          </Button>
+        </div>
+
         {/* Bottom Actions */}
         <div className="flex gap-3">
           <Button
             variant="outline"
             className="flex-1"
-            onClick={() => {/* Report functionality */}}
+            onClick={() => setShowReportDialog(true)}
           >
             <Flag className="mr-2 h-4 w-4" />
             Report Scam
@@ -177,12 +271,64 @@ export default function PostDetailPage() {
           <Button
             variant="outline"
             className="flex-1"
-            onClick={() => {/* Share functionality */}}
+            onClick={() => {
+              if (navigator.share) {
+                navigator.share({
+                  title: post.title,
+                  text: post.description,
+                  url: window.location.href,
+                })
+              } else {
+                navigator.clipboard.writeText(window.location.href)
+                alert("Link copied to clipboard!")
+              }
+            }}
           >
             <Share2 className="mr-2 h-4 w-4" />
             Share
           </Button>
         </div>
+
+        {/* Report Dialog */}
+        <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Report Post</DialogTitle>
+              <DialogDescription>
+                Help us keep IndianKonnect safe. Posts with 3+ reports are automatically hidden.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <label className="mb-2 block text-sm font-medium">
+                Reason for reporting
+              </label>
+              <textarea
+                className="w-full rounded-lg border border-border bg-background p-3"
+                rows={4}
+                placeholder="e.g., Scam, Fake listing, Spam, Inappropriate content..."
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowReportDialog(false)
+                  setReportReason("")
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleReport}
+                disabled={!reportReason.trim() || reporting}
+              >
+                {reporting ? "Reporting..." : "Submit Report"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
