@@ -2,7 +2,17 @@ import { Client, LocalAuth, Message } from 'whatsapp-web.js'
 import qrcode from 'qrcode-terminal'
 import { parseWhatsAppMessage } from '../lib/services/openai.js'
 import { supabase } from '../lib/supabase/supabase-bot.js'
-import { checkRateLimit, updateRateLimit } from '../lib/services/rate-limit.js'
+import { checkAndIncrementRateLimit } from '../lib/services/rate-limit.js'
+import { uploadImage } from '../lib/services/storage.js'
+import { normalizePhoneNumber } from '../lib/utils/phone.js'
+import { matchCity } from '../lib/services/city-matcher.js'
+import { validatePostData } from '../lib/services/post-validator.js'
+import { canUserPost } from '../lib/services/post-limits-bot.js'
+import { sanitizeMessage } from '../lib/utils/sanitize.js'
+import { logError, logInfo, logException } from '../lib/services/logger.js'
+
+// Maximum price allowed by database (DECIMAL(10, 2) = 99,999,999.99)
+const MAX_PRICE = 99999999.99
 
 const client = new Client({
   authStrategy: new LocalAuth({
@@ -48,6 +58,9 @@ client.on('disconnected', (reason) => {
 })
 
 client.on('message', async (message: Message) => {
+  // Extract and normalize phone number early for error handling
+  const phoneNumber = normalizePhoneNumber(message.from)
+  
   try {
     const from = message.from
     const body = message.body.toLowerCase().trim()
@@ -62,13 +75,10 @@ client.on('message', async (message: Message) => {
       return // Ignore non-post messages
     }
 
-    console.log(`📨 Processing post command from ${from}`)
+    logInfo('Processing post command', { phoneNumber })
 
-    // Extract phone number (remove @c.us suffix)
-    const phoneNumber = from.replace('@c.us', '')
-
-    // Check rate limit (5 posts per day for free users)
-    const rateLimitCheck = await checkRateLimit(phoneNumber)
+    // Check and increment rate limit atomically (5 posts per day for free users)
+    const rateLimitCheck = await checkAndIncrementRateLimit(phoneNumber)
     if (!rateLimitCheck.allowed) {
       await message.reply(
         `❌ Rate limit reached. ${rateLimitCheck.message}\n\nYou can post again in ${rateLimitCheck.timeRemaining}`
@@ -107,29 +117,57 @@ client.on('message', async (message: Message) => {
       return
     }
 
+    // Check if user can post (100 free posts limit or premium)
+    const postLimitCheck = await canUserPost(user.id)
+    if (!postLimitCheck.canPost) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://indiankonnect.com'
+      await message.reply(
+        `❌ ${postLimitCheck.reason}\n\nUpgrade to Premium: ${appUrl}/pricing`
+      )
+      return
+    }
+
     // Extract message text (remove "post" or "konnect" prefix)
     let messageText = message.body
       .replace(/^(post|konnect)\s+/i, '')
       .trim()
+
+    // Sanitize message text
+    messageText = sanitizeMessage(messageText)
 
     // Handle forwarded messages
     if (isForwarded && messageText) {
       messageText = `Forwarded: ${messageText}`
     }
 
-    // Download media if present
+    // Download and upload media if present
     let imageUrls: string[] = []
     if (hasMedia) {
       try {
         const media = await message.downloadMedia()
         if (media && media.mimetype?.startsWith('image/')) {
-          // For now, store base64. In production, upload to Supabase Storage
-          const base64Data = `data:${media.mimetype};base64,${media.data}`
-          imageUrls = [base64Data]
-          messageText += '\n[Image attached]'
+          // Upload to Supabase Storage
+          const uploadResult = await uploadImage(
+            media.data,
+            `whatsapp-${Date.now()}.${media.mimetype.split('/')[1] || 'jpg'}`,
+            media.mimetype
+          )
+
+          if (uploadResult.success && uploadResult.url) {
+            imageUrls = [uploadResult.url]
+            messageText += '\n[Image attached]'
+          } else {
+            // Inform user if image upload fails, but continue with text-only post
+            await message.reply(
+              `⚠️ Image could not be uploaded: ${uploadResult.error || 'Unknown error'}. Creating post without image.`
+            )
+          }
         }
       } catch (error) {
-        console.error('Error downloading media:', error)
+        console.error('Error downloading/uploading media:', error)
+        await message.reply(
+          '⚠️ Image could not be processed. Creating post without image.'
+        )
       }
     }
 
@@ -145,31 +183,63 @@ client.on('message', async (message: Message) => {
 
     if (!parsedPost) {
       await message.reply(
-        'Sorry, I couldn\'t parse your message. Please include: category, description, and price (if applicable).'
+        'Sorry, I couldn\'t parse your message. Please include: category, description, and price (if applicable).\n\nExample: post Room available in Brampton, ₹650/month, veg only'
       )
       return
     }
 
-    // Get or set user's city
+    // Clamp price to database limit before validation
+    const MAX_PRICE = 99999999.99
+    if (parsedPost.price !== undefined && parsedPost.price !== null) {
+      if (parsedPost.price > MAX_PRICE) {
+        await message.reply(
+          `❌ Price is too large (${parsedPost.price.toLocaleString()}). Maximum allowed is ${MAX_PRICE.toLocaleString()}. Please adjust your price.`
+        )
+        return
+      }
+      // Round to 2 decimal places to match database precision
+      parsedPost.price = Math.round(parsedPost.price * 100) / 100
+    }
+
+    // Validate parsed post data
+    const validation = validatePostData({
+      category: parsedPost.category,
+      title: parsedPost.title,
+      description: parsedPost.description,
+      price: parsedPost.price,
+      currency: parsedPost.currency,
+      gender_filter: parsedPost.gender_filter,
+    })
+
+    if (!validation.valid) {
+      await message.reply(
+        `❌ Validation error:\n${validation.errors.join('\n')}\n\nPlease check your message and try again.`
+      )
+      return
+    }
+
+    // Get or set user's city using improved city matcher
     let cityId = user.city_id
     if (!cityId && parsedPost.city) {
-      const { data: city } = await supabase
-        .from('cities')
-        .select('id')
-        .ilike('name', `%${parsedPost.city}%`)
-        .limit(1)
-        .single()
-
-      if (city) {
-        cityId = city.id
+      const matchedCityId = await matchCity(parsedPost.city)
+      if (matchedCityId) {
+        cityId = matchedCityId
         await supabase
           .from('users')
-          .update({ city_id: city.id })
+          .update({ city_id: matchedCityId })
           .eq('id', user.id)
       }
     }
 
-    // Create post in Supabase
+    // Ensure price is within database limits and properly formatted
+    let finalPrice: number | null = null
+    if (parsedPost.price !== undefined && parsedPost.price !== null) {
+      // Double-check price is within limits and round to 2 decimal places
+      finalPrice = Math.min(Math.max(0, parsedPost.price), MAX_PRICE)
+      finalPrice = Math.round(finalPrice * 100) / 100
+    }
+
+    // Create post in Supabase (pending approval)
     const { data: post, error: postError } = await supabase
       .from('posts')
       .insert({
@@ -177,7 +247,7 @@ client.on('message', async (message: Message) => {
         category: parsedPost.category,
         title: parsedPost.title,
         description: parsedPost.description,
-        price: parsedPost.price || null,
+        price: finalPrice,
         currency: parsedPost.currency || 'INR',
         images: imageUrls,
         city_id: cityId,
@@ -186,36 +256,75 @@ client.on('message', async (message: Message) => {
         is_anonymous: false,
         is_premium: user.is_premium || false,
         is_verified_owner: user.is_verified || false,
-        is_active: true,
+        is_active: true, // Auto-approve bot posts (set to false if you want admin approval)
       })
       .select()
       .single()
 
     if (postError || !post) {
       console.error('Error creating post:', postError)
-      await message.reply(
-        'Sorry, there was an error creating your post. Please try again later.'
-      )
+      
+      // Provide specific error messages for common issues
+      let errorMessage = 'Failed to create post. Please try again later.'
+      
+      if (postError?.code === '22003' || postError?.message?.includes('numeric field overflow')) {
+        errorMessage = '❌ Price is too large. Maximum allowed price is ₹99,999,999.99. Please adjust your price and try again.'
+      } else if (postError?.code === '42501') {
+        errorMessage = '❌ Permission error. Please contact support if this persists.'
+      } else if (postError?.message) {
+        errorMessage = `❌ Error: ${postError.message}`
+      }
+      
+      await message.reply(errorMessage)
       return
     }
 
-    // Update rate limit
-    await updateRateLimit(phoneNumber)
+    // Rate limit was already incremented in checkAndIncrementRateLimit
 
     // Send success message
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://indiankonnect.com'
     const postLink = `${appUrl}/posts/${post.id}`
     const remainingPosts = rateLimitCheck.remaining || 0
+    const freePostsRemaining = postLimitCheck.freePostsRemaining
 
-    const reply = `✅ Post created successfully!\n\n📱 View your post:\n${postLink}\n\n🆓 Posts remaining today: ${remainingPosts}\n\nShare this link with others!`
+    let reply = `✅ Post created successfully!\n\n📱 View your post:\n${postLink}\n\n`
+    
+    if (freePostsRemaining !== undefined) {
+      reply += `🆓 Free posts remaining: ${freePostsRemaining}\n`
+    }
+    
+    reply += `📅 Posts remaining today: ${remainingPosts}\n\n`
+    reply += `⏳ Your post is pending admin approval and will be visible soon.\n\n`
+    reply += `Share this link with others!`
 
     await message.reply(reply)
-    console.log(`✅ Post created: ${post.id} for ${phoneNumber}`)
+    logInfo('Post created successfully', { postId: post.id, phoneNumber })
   } catch (error) {
-    console.error('Error processing message:', error)
-    await message.reply(
-      'Sorry, there was an error processing your message. Please try again later.'
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logException(
+      error instanceof Error ? error : new Error(errorMessage),
+      'Error processing WhatsApp message',
+      { phoneNumber }
     )
+    
+    // Provide more specific error messages
+    if (errorMessage.includes('rate limit')) {
+      await message.reply(
+        '❌ Rate limit error. Please try again later.'
+      )
+    } else if (errorMessage.includes('database') || errorMessage.includes('Supabase')) {
+      await message.reply(
+        '❌ Database error. Please try again in a few moments.'
+      )
+    } else if (errorMessage.includes('parse') || errorMessage.includes('OpenAI')) {
+      await message.reply(
+        '❌ Could not understand your message. Please try rephrasing with more details.'
+      )
+    } else {
+      await message.reply(
+        `❌ Error: ${errorMessage}. Please try again later or contact support.`
+      )
+    }
   }
 })
 

@@ -20,12 +20,11 @@ export async function GET(request: NextRequest) {
       .from("posts")
       .select("*", { count: "exact", head: true })
 
-    // Get pending posts (posts that need approval - for now, all active posts)
-    // In future, add an approval_status field
+    // Get pending posts (posts with is_active = false, awaiting approval)
     const { count: pendingPosts } = await supabase
       .from("posts")
       .select("*", { count: "exact", head: true })
-      .eq("is_active", true)
+      .eq("is_active", false)
 
     // Get premium users
     const { count: premiumUsers } = await supabase

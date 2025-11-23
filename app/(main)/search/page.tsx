@@ -61,7 +61,7 @@ export default function SearchPage() {
       </div>
 
       {/* Results */}
-      <div className="divide-y divide-border">
+      <div className="space-y-1">
         {mockPosts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <SearchIcon className="mb-4 h-12 w-12 text-muted-foreground" />
@@ -71,33 +71,68 @@ export default function SearchPage() {
             </p>
           </div>
         ) : (
-          mockPosts.map((post) => (
-            <Link
-              key={post.id}
-              href={`/posts/${post.id}`}
-              className="block px-4 py-3 active:bg-muted/50"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-green to-saffron text-2xl">
-                  🇮🇳
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{post.title}</p>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {post.description}
-                  </p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {formatTimeAgo(new Date(post.created_at))}
-                    </span>
-                    <span className="text-xs font-semibold text-saffron">
-                      {formatCurrency(post.price, post.currency)}
+          mockPosts.map((post, index) => {
+            const postDate = new Date(post.created_at)
+            const prevPostDate = index > 0 ? new Date(mockPosts[index - 1].created_at) : null
+            const showDateSeparator = prevPostDate && 
+              (postDate.toDateString() !== prevPostDate.toDateString())
+            
+            return (
+              <div key={post.id}>
+                {/* Date Separator */}
+                {showDateSeparator && (
+                  <div className="px-4 py-2 border-b border-border">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {postDate.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
                     </span>
                   </div>
-                </div>
+                )}
+                
+                {/* Post Item */}
+                <Link
+                  href={`/posts/${post.id}`}
+                  className="block px-4 py-4 border-b border-border/50 active:bg-muted/50 hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-green to-saffron text-2xl">
+                      🇮🇳
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate mb-1.5">{post.title}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                        {post.description}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {formatTimeAgo(postDate)}
+                        </span>
+                        <span className="text-xs text-muted-foreground/70">
+                          • {postDate.toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                          })}
+                        </span>
+                        {post.price !== null && (
+                          <>
+                            <span className="text-xs text-muted-foreground/70">•</span>
+                            <span className="text-xs font-semibold text-saffron">
+                              {formatCurrency(post.price, post.currency)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
               </div>
-            </Link>
-          ))
+            )
+          })
         )}
       </div>
 

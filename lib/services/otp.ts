@@ -6,23 +6,7 @@
 
 import { sendWhatsAppMessage } from "./whatsapp"
 import { supabase } from "@/lib/supabase/client"
-
-// Fallback in-memory store (for edge cases)
-const otpStore = new Map<string, { code: string; expiresAt: number }>()
-
-// Normalize phone number to consistent format
-function normalizePhoneNumber(phone: string): string {
-  // Remove all spaces, dashes, and parentheses
-  let normalized = phone.replace(/[\s\-\(\)]/g, "")
-  
-  // Ensure it starts with +
-  if (!normalized.startsWith("+")) {
-    // If it doesn't start with +, add it
-    normalized = "+" + normalized
-  }
-  
-  return normalized
-}
+import { normalizePhoneNumber } from "@/lib/utils/phone"
 
 // Generate 6-digit OTP
 function generateOTP(): string {
@@ -63,8 +47,10 @@ export async function sendOTP(
 
     if (dbError) {
       console.error("Database error storing OTP:", dbError)
-      // Fallback to in-memory store
-      otpStore.set(normalizedPhone, { code: otp, expiresAt: expiresAt.getTime() })
+      return {
+        success: false,
+        error: "Failed to store OTP. Please try again.",
+      }
     }
     
     console.log(`[OTP] Stored OTP for ${normalizedPhone}: ${otp}`)
@@ -90,8 +76,6 @@ export async function sendOTP(
         .eq("phone_number", normalizedPhone)
         .eq("code", otp)
         .eq("verified", false)
-      
-      otpStore.delete(normalizedPhone)
       return {
         success: false,
         error: result.error || "Failed to send OTP",
@@ -152,18 +136,6 @@ export async function verifyOTP(
       }
 
       stored = { code: otpData.code, expiresAt }
-    } else {
-      // Fallback to in-memory store
-      stored = otpStore.get(normalizedPhone) || null
-      
-      if (stored && Date.now() > stored.expiresAt) {
-        otpStore.delete(normalizedPhone)
-        console.log(`[OTP] OTP expired (in-memory) for ${normalizedPhone}`)
-        return {
-          success: false,
-          error: "OTP expired. Please request a new OTP.",
-        }
-      }
     }
 
     if (!stored) {
@@ -192,9 +164,6 @@ export async function verifyOTP(
         .update({ verified: true })
         .eq("id", otpData.id)
     }
-    
-    // Remove from in-memory store
-    otpStore.delete(normalizedPhone)
     console.log(`[OTP] Successfully verified OTP for ${normalizedPhone}`)
 
     // Generate JWT token (in production, use proper JWT library)
@@ -228,8 +197,6 @@ export async function resendOTP(
     .update({ verified: true })
     .eq("phone_number", normalizedPhone)
     .eq("verified", false)
-  
-  otpStore.delete(normalizedPhone)
   return sendOTP(phoneNumber)
 }
 

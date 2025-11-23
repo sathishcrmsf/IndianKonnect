@@ -60,11 +60,32 @@ export default function PostDetailPage() {
   const [reporting, setReporting] = useState(false)
 
   useEffect(() => {
-    // Simulate loading
-    setTimeout(() => {
-      setPost(mockPost)
-      setLoading(false)
-    }, 500)
+    // Fetch post from API
+    const fetchPost = async () => {
+      if (!params.id) return
+      
+      try {
+        const response = await fetch(`/api/posts/${params.id}`)
+        const data = await response.json()
+        
+        if (data.post) {
+          setPost(data.post)
+        } else if (data.error) {
+          console.error('Error fetching post:', data.error)
+          // Post not found or error
+        }
+      } catch (error) {
+        console.error('Error fetching post:', error)
+        // Fallback to mock data on error (for development)
+        if (process.env.NODE_ENV === 'development') {
+          setPost(mockPost)
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPost()
   }, [params.id])
 
   if (loading) {
@@ -199,11 +220,13 @@ export default function PostDetailPage() {
         )}
 
         {/* Price */}
-        <div className="mb-4">
-          <p className="text-3xl font-bold text-saffron">
-            {formatCurrency(post.price, post.currency)}
-          </p>
-        </div>
+        {post.price !== null && post.price !== undefined && (
+          <div className="mb-4">
+            <p className="text-3xl font-bold text-saffron">
+              {formatCurrency(post.price, post.currency)}
+            </p>
+          </div>
+        )}
 
         {/* Title */}
         <h2 className="mb-4 text-xl font-semibold">{post.title}</h2>

@@ -7,8 +7,8 @@ function getSupabaseClient(): SupabaseClient {
     return supabaseClient
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dnsgwppfbspjstduaouj.supabase.co'
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuc2d3cHBmYnNwanN0ZHVhb3VqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4NTM0MTQsImV4cCI6MjA3OTQyOTQxNH0.U1V3ZFwmA3q6hbBXP1rPFTlcM890SMGYhH6pAm10dTM'
 
   if (!supabaseUrl || !supabaseKey) {
     console.error('⚠️  Missing Supabase environment variables!')

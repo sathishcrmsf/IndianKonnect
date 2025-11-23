@@ -11,9 +11,14 @@ export async function GET(
       .from("posts")
       .select("*, user:users(*), city:cities(*)")
       .eq("id", params.id)
+      .eq("is_active", true) // Only return active posts
       .single()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows returned
+        return NextResponse.json({ error: "Post not found" }, { status: 404 })
+      }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 

@@ -50,11 +50,24 @@ export default function HomePage() {
   const [city, setCity] = useState("Brampton")
 
   useEffect(() => {
-    // Simulate loading
-    setTimeout(() => {
-      setPosts(mockPosts)
-      setLoading(false)
-    }, 1000)
+    // Fetch posts from API
+    const fetchPosts = async () => {
+      try {
+        const response = await fetch('/api/posts?limit=50')
+        const data = await response.json()
+        if (data.posts) {
+          setPosts(data.posts)
+        }
+      } catch (error) {
+        console.error('Error fetching posts:', error)
+        // Fallback to mock data on error
+        setPosts(mockPosts)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPosts()
   }, [])
 
   return (
@@ -86,48 +99,84 @@ export default function HomePage() {
       {loading ? (
         <DiyaSpinner />
       ) : (
-        <div className="divide-y divide-border">
-          {posts.map((post) => (
-            <Link
-              key={post.id}
-              href={`/posts/${post.id}`}
-              className="block px-4 py-3 active:bg-muted/50"
-            >
-              <div className="flex items-start gap-3">
-                {/* Profile Pic */}
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-green to-saffron text-2xl">
-                  🇮🇳
-                </div>
+        <div className="space-y-1">
+          {posts.map((post, index) => {
+            const postDate = new Date(post.created_at)
+            const prevPostDate = index > 0 ? new Date(posts[index - 1].created_at) : null
+            const showDateSeparator = prevPostDate && 
+              (postDate.toDateString() !== prevPostDate.toDateString())
+            
+            return (
+              <div key={post.id}>
+                {/* Date Separator */}
+                {showDateSeparator && (
+                  <div className="px-4 py-2 border-b border-border">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {postDate.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Post Item */}
+                <Link
+                  href={`/posts/${post.id}`}
+                  className="block px-4 py-4 border-b border-border/50 active:bg-muted/50 hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Profile Pic */}
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-green to-saffron text-2xl">
+                      🇮🇳
+                    </div>
 
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium truncate">
-                      {post.is_anonymous ? "Anonymous" : post.user?.phone || "User"}
-                    </span>
-                    {post.is_premium && (
-                      <Verified className="h-4 w-4 text-blue-500 shrink-0" />
-                    )}
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="font-medium truncate">
+                          {post.is_anonymous ? "Anonymous" : post.user?.phone || "User"}
+                        </span>
+                        {post.is_premium && (
+                          <Verified className="h-4 w-4 text-blue-500 shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                        {post.price !== null && (
+                          <span className="font-semibold text-saffron">
+                            {formatCurrency(post.price, post.currency)}
+                          </span>
+                        )}
+                        {post.price !== null && " • "}
+                        {post.title}
+                        {post.veg_only && " • Veg only"}
+                        {post.description && ` • ${post.description}`}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {formatTimeAgo(postDate)}
+                        </span>
+                        <span className="text-xs text-muted-foreground/70">
+                          • {postDate.toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                          })}
+                        </span>
+                        {isNewPost(postDate) && (
+                          <Badge variant="success" className="text-xs ml-auto">
+                            New
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {post.price !== null && `${formatCurrency(post.price, post.currency)} • `}
-                    {post.title} •{" "}
-                    {post.veg_only ? "Veg only" : "Non-veg"} • {post.description}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-muted-foreground">
-                      {formatTimeAgo(new Date(post.created_at))}
-                    </span>
-                    {isNewPost(new Date(post.created_at)) && (
-                      <Badge variant="success" className="text-xs">
-                        New
-                      </Badge>
-                    )}
-                  </div>
-                </div>
+                </Link>
               </div>
-            </Link>
-          ))}
+            )
+          })}
         </div>
       )}
 

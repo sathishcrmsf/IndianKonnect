@@ -7,12 +7,11 @@ import { supabase } from "@/lib/supabase/client"
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get pending posts (for now, all active posts)
-    // In future, filter by approval_status = 'pending'
+    // Get pending posts (posts with is_active = false, awaiting approval)
     const { data: posts, error } = await supabase
       .from("posts")
       .select("*, user:users(phone), city:cities(name)")
-      .eq("is_active", true)
+      .eq("is_active", false)
       .order("created_at", { ascending: false })
       .limit(50)
 

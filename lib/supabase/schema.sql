@@ -300,14 +300,27 @@ CREATE POLICY "update_users_own" ON users
 CREATE POLICY "select_posts_all" ON posts 
   FOR SELECT USING (is_active = true);
 
+-- Allow authenticated users OR service role (anon key) to insert posts
+-- Service role (auth.uid() IS NULL) is needed for WhatsApp bot
 CREATE POLICY "insert_posts_own" ON posts 
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
+  FOR INSERT WITH CHECK (
+    auth.uid()::text = user_id::text OR 
+    auth.uid() IS NULL
+  );
 
+-- Allow authenticated users OR service role to update posts
 CREATE POLICY "update_posts_own" ON posts 
-  FOR UPDATE USING (auth.uid()::text = user_id::text);
+  FOR UPDATE USING (
+    auth.uid()::text = user_id::text OR 
+    auth.uid() IS NULL
+  );
 
+-- Allow authenticated users OR service role to delete posts
 CREATE POLICY "delete_posts_own" ON posts 
-  FOR DELETE USING (auth.uid()::text = user_id::text);
+  FOR DELETE USING (
+    auth.uid()::text = user_id::text OR 
+    auth.uid() IS NULL
+  );
 
 -- Reports policies
 CREATE POLICY "insert_reports_own" ON reports 
@@ -327,8 +340,15 @@ CREATE POLICY "insert_chats_own" ON chats
   FOR INSERT WITH CHECK (auth.uid()::text = sender_id::text);
 
 -- Rate limits policies
+-- Allow service role (anon key) to read/write rate limits (needed for WhatsApp bot)
 CREATE POLICY "select_rate_limits_own" ON rate_limits 
-  FOR SELECT USING (true); -- Can check own rate limits
+  FOR SELECT USING (true);
+
+CREATE POLICY "insert_rate_limits_all" ON rate_limits 
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "update_rate_limits_all" ON rate_limits 
+  FOR UPDATE USING (true);
 
 -- OTP verifications policies
 CREATE POLICY "select_otp_all" ON otp_verifications 
