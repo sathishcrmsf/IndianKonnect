@@ -120,6 +120,22 @@ CREATE TABLE rate_limits (
 );
 
 -- ============================================
+-- OTP VERIFICATIONS TABLE
+-- ============================================
+CREATE TABLE otp_verifications (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  phone_number VARCHAR(20) NOT NULL,
+  code VARCHAR(6) NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  verified BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create partial unique index for unverified OTPs (one active OTP per phone)
+CREATE UNIQUE INDEX uk_otp_phone_active ON otp_verifications(phone_number) 
+  WHERE verified = false;
+
+-- ============================================
 -- PAYMENTS TABLE
 -- ============================================
 CREATE TABLE payments (
@@ -180,6 +196,11 @@ CREATE INDEX idx_chats_sender_receiver ON chats(sender_id, receiver_id);
 -- Rate limits indexes
 CREATE INDEX idx_rate_limits_phone_date ON rate_limits(phone_number, date);
 CREATE INDEX idx_rate_limits_date ON rate_limits(date DESC);
+
+-- OTP verifications indexes
+CREATE INDEX idx_otp_phone_number ON otp_verifications(phone_number);
+CREATE INDEX idx_otp_expires_at ON otp_verifications(expires_at);
+CREATE INDEX idx_otp_verified ON otp_verifications(verified);
 
 -- Payments indexes
 CREATE INDEX idx_payments_user_id ON payments(user_id);
@@ -247,6 +268,7 @@ ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE otp_verifications ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if any (for migrations)
 DROP POLICY IF EXISTS "select_users_all" ON users;
@@ -305,6 +327,16 @@ CREATE POLICY "insert_chats_own" ON chats
 -- Rate limits policies
 CREATE POLICY "select_rate_limits_own" ON rate_limits 
   FOR SELECT USING (true); -- Can check own rate limits
+
+-- OTP verifications policies
+CREATE POLICY "select_otp_all" ON otp_verifications 
+  FOR SELECT USING (true); -- Allow reading OTPs for verification
+
+CREATE POLICY "insert_otp_all" ON otp_verifications 
+  FOR INSERT WITH CHECK (true); -- Allow creating OTPs
+
+CREATE POLICY "update_otp_all" ON otp_verifications 
+  FOR UPDATE USING (true); -- Allow updating OTPs (marking as verified)
 
 -- Payments policies
 CREATE POLICY "select_payments_own" ON payments 
