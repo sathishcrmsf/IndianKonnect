@@ -1,4 +1,4 @@
-import { supabase } from '../supabase/supabase-bot'
+import { supabase } from '../supabase/supabase-bot.js'
 
 const DAILY_POST_LIMIT = 5
 

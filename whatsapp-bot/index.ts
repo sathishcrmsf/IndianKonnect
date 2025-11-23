@@ -1,8 +1,8 @@
 import { Client, LocalAuth, Message } from 'whatsapp-web.js'
 import qrcode from 'qrcode-terminal'
-import { parseWhatsAppMessage } from '../lib/services/openai'
-import { supabase } from '../lib/supabase/supabase-bot'
-import { checkRateLimit, updateRateLimit } from '../lib/services/rate-limit'
+import { parseWhatsAppMessage } from '../lib/services/openai.js'
+import { supabase } from '../lib/supabase/supabase-bot.js'
+import { checkRateLimit, updateRateLimit } from '../lib/services/rate-limit.js'
 
 const client = new Client({
   authStrategy: new LocalAuth({
