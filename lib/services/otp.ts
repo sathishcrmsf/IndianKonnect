@@ -43,10 +43,11 @@ export async function sendOTP(
     const otp = generateOTP()
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
 
-    // Mark any existing unverified OTPs as verified (invalidate them)
+    // Delete any existing unverified OTPs for this phone number
+    // This ensures we only have one active OTP per phone number
     await supabase
       .from("otp_verifications")
-      .update({ verified: true })
+      .delete()
       .eq("phone_number", normalizedPhone)
       .eq("verified", false)
 
