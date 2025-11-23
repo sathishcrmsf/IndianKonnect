@@ -35,7 +35,16 @@ export async function POST(request: NextRequest) {
       .eq("phone", phoneNumber)
       .single()
 
-    if (userError || !user) {
+    // Check if user doesn't exist (error code PGRST116 means no rows returned)
+    if (userError && userError.code !== "PGRST116" && userError.code !== "42P01") {
+      console.error("Error fetching user:", userError)
+      return NextResponse.json(
+        { error: "Failed to fetch user", details: userError.message },
+        { status: 500 }
+      )
+    }
+
+    if (!user) {
       // Create new user
       const { data: newUser, error: createError } = await supabase
         .from("users")
@@ -48,9 +57,23 @@ export async function POST(request: NextRequest) {
         .select()
         .single()
 
-      if (createError || !newUser) {
+      if (createError) {
+        console.error("Error creating user:", createError)
         return NextResponse.json(
-          { error: "Failed to create user" },
+          { 
+            error: "Failed to create user", 
+            details: createError.message,
+            code: createError.code,
+            hint: createError.hint
+          },
+          { status: 500 }
+        )
+      }
+
+      if (!newUser) {
+        console.error("User creation returned no data")
+        return NextResponse.json(
+          { error: "Failed to create user - no data returned" },
           { status: 500 }
         )
       }
@@ -69,9 +92,22 @@ export async function POST(request: NextRequest) {
         .select()
         .single()
 
-      if (updateError || !updatedUser) {
+      if (updateError) {
+        console.error("Error updating user:", updateError)
         return NextResponse.json(
-          { error: "Failed to update user" },
+          { 
+            error: "Failed to update user",
+            details: updateError.message,
+            code: updateError.code
+          },
+          { status: 500 }
+        )
+      }
+
+      if (!updatedUser) {
+        console.error("User update returned no data")
+        return NextResponse.json(
+          { error: "Failed to update user - no data returned" },
           { status: 500 }
         )
       }

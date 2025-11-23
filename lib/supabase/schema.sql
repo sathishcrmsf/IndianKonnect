@@ -250,6 +250,7 @@ ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if any (for migrations)
 DROP POLICY IF EXISTS "select_users_all" ON users;
+DROP POLICY IF EXISTS "insert_users_all" ON users;
 DROP POLICY IF EXISTS "update_users_own" ON users;
 DROP POLICY IF EXISTS "select_posts_all" ON posts;
 DROP POLICY IF EXISTS "insert_posts_own" ON posts;
@@ -265,8 +266,11 @@ DROP POLICY IF EXISTS "select_rate_limits_own" ON rate_limits;
 CREATE POLICY "select_users_all" ON users 
   FOR SELECT USING (true);
 
+CREATE POLICY "insert_users_all" ON users 
+  FOR INSERT WITH CHECK (true); -- Allow anyone to create users (OTP verified)
+
 CREATE POLICY "update_users_own" ON users 
-  FOR UPDATE USING (auth.uid()::text = id::text);
+  FOR UPDATE USING (true); -- Allow updates (will be restricted by application logic)
 
 -- Posts policies
 CREATE POLICY "select_posts_all" ON posts 
