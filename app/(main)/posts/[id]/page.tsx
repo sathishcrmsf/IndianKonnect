@@ -272,15 +272,26 @@ export default function PostDetailPage() {
             variant="outline"
             className="flex-1"
             onClick={() => {
+              const shareText = `Check out this post on IndianKonnect:
+
+${post.title}${post.price ? ` - ${formatCurrency(post.price, post.currency)}` : ""}
+
+${post.description}
+
+View details: ${window.location.href}
+
+Join IndianKonnect - One safe place for Indians abroad! 🇮🇳`
+
               if (navigator.share) {
                 navigator.share({
                   title: post.title,
-                  text: post.description,
+                  text: shareText,
                   url: window.location.href,
                 })
               } else {
-                navigator.clipboard.writeText(window.location.href)
-                alert("Link copied to clipboard!")
+                // Share to WhatsApp
+                const encodedText = encodeURIComponent(shareText)
+                window.open(`https://wa.me/?text=${encodedText}`, "_blank")
               }
             }}
           >

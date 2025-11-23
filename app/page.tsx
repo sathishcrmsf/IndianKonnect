@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Globe } from "lucide-react"
 import Link from "next/link"
 
@@ -53,6 +54,15 @@ export default function LandingPage() {
             <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         </Link>
+
+        {/* Launch Badge */}
+        <div className="mb-4">
+          <Link href="/launch">
+            <Badge className="bg-saffron text-white hover:bg-saffron/90">
+              🎉 Now Live! See Launch Announcement
+            </Badge>
+          </Link>
+        </div>
 
         {/* Supported Cities */}
         <div className="w-full max-w-md">
