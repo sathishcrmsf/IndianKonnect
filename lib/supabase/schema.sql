@@ -30,6 +30,7 @@ CREATE TABLE users (
   city_id UUID REFERENCES cities(id) ON DELETE SET NULL,
   is_premium BOOLEAN DEFAULT false,
   is_verified BOOLEAN DEFAULT false,
+  is_admin BOOLEAN DEFAULT false,
   verified_at TIMESTAMP WITH TIME ZONE,
   success_count INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -167,6 +168,7 @@ CREATE INDEX idx_users_phone ON users(phone);
 CREATE INDEX idx_users_city_id ON users(city_id);
 CREATE INDEX idx_users_is_premium ON users(is_premium);
 CREATE INDEX idx_users_is_verified ON users(is_verified);
+CREATE INDEX idx_users_is_admin ON users(is_admin);
 CREATE INDEX idx_users_created_at ON users(created_at DESC);
 
 -- Posts indexes
