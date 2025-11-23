@@ -40,3 +40,10 @@ next-env.d.ts
 /playwright-report/
 /playwright/.cache/
 
+# WhatsApp bot session data
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Docker
+.dockerignore
+
