@@ -88,12 +88,21 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - WhatsApp chat buttons
 
 ### Phase 4: WhatsApp Webhook Integration ✅
-- Twilio webhook endpoint (`/api/whatsapp/incoming`)
+- WhatsApp bot using whatsapp-web.js (runs 24/7)
 - GPT-4o-mini message parsing
 - Automatic post creation from WhatsApp messages
 - Free post limits (first 100 posts free, then Premium only)
+- Rate limiting (5 posts/day for free users)
 - Automatic WhatsApp replies with post links
 - User auto-creation from phone numbers
+
+### Phase 5: Pricing & Payments ✅
+- Lifetime pricing page (`/pricing`)
+- ₹299 for India (Razorpay) / $19 International (Stripe)
+- Payment verification and user upgrade
+- Founder member countdown timer
+- Premium benefits display
+- Payment history tracking
 
 ## Testing
 

@@ -120,6 +120,25 @@ CREATE TABLE rate_limits (
 );
 
 -- ============================================
+-- PAYMENTS TABLE
+-- ============================================
+CREATE TABLE payments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL,
+  amount DECIMAL(10, 2) NOT NULL,
+  currency VARCHAR(3) NOT NULL,
+  provider VARCHAR(20) NOT NULL CHECK (provider IN ('razorpay', 'stripe')),
+  payment_id VARCHAR(255) NOT NULL,
+  order_id VARCHAR(255),
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'refunded')),
+  metadata JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  CONSTRAINT fk_payments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- ============================================
 -- INDEXES
 -- ============================================
 
@@ -161,6 +180,12 @@ CREATE INDEX idx_chats_sender_receiver ON chats(sender_id, receiver_id);
 -- Rate limits indexes
 CREATE INDEX idx_rate_limits_phone_date ON rate_limits(phone_number, date);
 CREATE INDEX idx_rate_limits_date ON rate_limits(date DESC);
+
+-- Payments indexes
+CREATE INDEX idx_payments_user_id ON payments(user_id);
+CREATE INDEX idx_payments_payment_id ON payments(payment_id);
+CREATE INDEX idx_payments_status ON payments(status);
+CREATE INDEX idx_payments_created_at ON payments(created_at DESC);
 
 -- ============================================
 -- FUNCTIONS
@@ -207,6 +232,10 @@ CREATE TRIGGER trigger_rate_limits_updated_at
   BEFORE UPDATE ON rate_limits
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER trigger_payments_updated_at 
+  BEFORE UPDATE ON payments
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================
@@ -217,6 +246,7 @@ ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if any (for migrations)
 DROP POLICY IF EXISTS "select_users_all" ON users;
@@ -271,6 +301,13 @@ CREATE POLICY "insert_chats_own" ON chats
 -- Rate limits policies
 CREATE POLICY "select_rate_limits_own" ON rate_limits 
   FOR SELECT USING (true); -- Can check own rate limits
+
+-- Payments policies
+CREATE POLICY "select_payments_own" ON payments 
+  FOR SELECT USING (auth.uid()::text = user_id::text);
+
+CREATE POLICY "insert_payments_own" ON payments 
+  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
 
 -- ============================================
 -- SEED DATA

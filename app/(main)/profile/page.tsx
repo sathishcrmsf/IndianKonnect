@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Settings, Verified, Trophy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,8 +16,33 @@ const mockUser = {
 }
 
 export default function ProfilePage() {
+  const router = useRouter()
   const [user, setUser] = useState(mockUser)
   const [countdown, setCountdown] = useState("387 spots left")
+  const [showUpgradeSuccess, setShowUpgradeSuccess] = useState(false)
+
+  useEffect(() => {
+    // Check if user just upgraded (from URL params or localStorage)
+    const urlParams = new URLSearchParams(window.location.search)
+    const upgraded = urlParams.get("upgraded") === "true"
+    const upgradedFromStorage = localStorage.getItem("justUpgraded") === "true"
+
+    if (upgraded || upgradedFromStorage) {
+      setShowUpgradeSuccess(true)
+      // Refresh user data to show premium status
+      // In production, fetch from API
+      setUser({ ...mockUser, is_premium: true })
+      localStorage.removeItem("justUpgraded")
+      
+      // Clean URL
+      if (upgraded) {
+        router.replace("/profile", { scroll: false })
+      }
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => setShowUpgradeSuccess(false), 5000)
+    }
+  }, [router])
 
   return (
     <div className="min-h-screen bg-background">
@@ -29,6 +55,18 @@ export default function ProfilePage() {
       </div>
 
       <div className="px-4 py-6">
+        {/* Upgrade Success Message */}
+        {showUpgradeSuccess && (
+          <div className="mb-4 rounded-lg border border-whatsapp-green bg-whatsapp-green/10 p-4 text-center">
+            <p className="text-lg font-bold text-whatsapp-green">
+              🎉 Welcome to Premium!
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Your account has been upgraded to Lifetime Premium
+            </p>
+          </div>
+        )}
+
         {/* Profile Header */}
         <div className="mb-6 text-center">
           <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-green to-saffron text-4xl">
@@ -71,8 +109,8 @@ export default function ProfilePage() {
             <p className="mb-4 text-sm text-muted-foreground">
               Get verified badge, priority listing, and more
             </p>
-            <Button className="w-full mb-2">
-              Upgrade Lifetime – ₹299 / $19
+            <Button className="w-full mb-2" asChild>
+              <a href="/pricing">Upgrade Lifetime – ₹299 / $19</a>
             </Button>
             <p className="text-center text-xs text-muted-foreground">
               {countdown} at founder price
