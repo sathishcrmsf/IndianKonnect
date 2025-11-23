@@ -22,8 +22,9 @@ export async function POST(request: NextRequest) {
     const verification = await verifyOTP(phoneNumber, otp)
 
     if (!verification.success) {
+      console.error("OTP verification failed:", verification.error)
       return NextResponse.json(
-        { error: "Invalid OTP" },
+        { error: verification.error || "Invalid OTP" },
         { status: 400 }
       )
     }

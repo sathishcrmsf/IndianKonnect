@@ -98,7 +98,8 @@ export default function OnboardingPage() {
   }
 
   const handleVerifyOTP = async () => {
-    if (otp.length !== 6) return
+    const trimmedOtp = otp.trim()
+    if (trimmedOtp.length !== 6) return
 
     setVerifyLoading(true)
     try {
@@ -108,7 +109,7 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phoneNumber: fullPhone,
-          otp,
+          otp: trimmedOtp,
         }),
       })
 
